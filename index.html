@@ -657,21 +657,25 @@
                 const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.8 });
                 const leftLeg = new THREE.Mesh(legGeo, mat);
                 leftLeg.position.set(-0.15 * size, 0.3 * size, 0);
+                leftLeg.userData.bodyPart = 'leg'; // Tag for damage
                 this.mesh.add(leftLeg);
                 const rightLeg = new THREE.Mesh(legGeo, mat);
                 rightLeg.position.set(0.15 * size, 0.3 * size, 0);
+                rightLeg.userData.bodyPart = 'leg'; // Tag for damage
                 this.mesh.add(rightLeg);
 
                 // Torso - above legs
                 const torsoGeo = new THREE.BoxGeometry(0.5 * size, 0.7 * size, 0.35 * size);
                 const torso = new THREE.Mesh(torsoGeo, mat);
                 torso.position.y = 0.95 * size;
+                torso.userData.bodyPart = 'body'; // Tag for damage
                 this.mesh.add(torso);
 
                 // Head - on top of torso
                 const headGeo = new THREE.BoxGeometry(0.35 * size, 0.35 * size, 0.35 * size);
                 const head = new THREE.Mesh(headGeo, mat);
                 head.position.y = 1.45 * size;
+                head.userData.bodyPart = 'head'; // Tag for critical damage!
                 this.mesh.add(head);
 
                 // Eyes - Glowing on head
@@ -685,17 +689,19 @@
                 rightEye.position.set(0.09 * size, 1.47 * size, 0.18 * size);
                 this.mesh.add(rightEye);
 
-                // Arms - at shoulder height, pointing down
+                // Arms - at SHOULDER height, pointing down
                 const armGeo = new THREE.BoxGeometry(0.12 * size, 0.5 * size, 0.12 * size);
                 const leftArm = new THREE.Mesh(armGeo, mat);
-                leftArm.position.set(-0.35 * size, 0.75 * size, 0.05 * size);
-                leftArm.rotation.z = 0.15;  // Slight outward angle
-                leftArm.rotation.x = 0.3;    // Point downward/forward
+                leftArm.position.set(-0.32 * size, 1.05 * size, 0.05 * size); // At shoulder/top of torso
+                leftArm.rotation.z = 0.2;     // Slight outward
+                leftArm.rotation.x = 0.4;     // Point downward
+                leftArm.userData.bodyPart = 'arm';  // Tag for damage detection
                 this.mesh.add(leftArm);
                 const rightArm = new THREE.Mesh(armGeo, mat);
-                rightArm.position.set(0.35 * size, 0.75 * size, 0.05 * size);
-                rightArm.rotation.z = -0.15; // Slight outward angle
-                rightArm.rotation.x = 0.3;    // Point downward/forward
+                rightArm.position.set(0.32 * size, 1.05 * size, 0.05 * size); // At shoulder/top of torso
+                rightArm.rotation.z = -0.2;    // Slight outward
+                rightArm.rotation.x = 0.4;     // Point downward
+                rightArm.userData.bodyPart = 'arm'; // Tag for damage detection
                 this.mesh.add(rightArm);
 
                 // Boss features
@@ -1583,18 +1589,64 @@
                 updateHUD();
             }
 
-            // 4. Bullets
+            // 4. Bullets with per-body-part damage
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.update(delta);
 
-                // Zombie Collision - Check all enemy types with larger radius for headshots
+                // Enemy Collision with body part detection
                 for (let j = zombies.length - 1; j >= 0; j--) {
                     let z = zombies[j];
-                    // Increased radius to 1.5 to allow hitting head and all body parts
-                    if (z.alive && b.alive && !b.hitEnemies.has(z) && b.mesh.position.distanceTo(z.mesh.position) < 1.5) {
-                        // Apply critical hit
-                        let damage = b.damage;
+                    if (!z.alive || !b.alive || b.hitEnemies.has(z)) continue;
+
+                    // Check collision with each body part
+                    let hitDetected = false;
+                    let damageMultiplier = 1.0;
+                    let hitPart = 'body';
+
+                    // Get world position of bullet
+                    const bulletPos = b.mesh.position;
+
+                    // Check each child mesh (body parts)
+                    z.mesh.children.forEach(child => {
+                        if (!child.geometry || hitDetected) return; // Skip non-mesh children or if already hit
+
+                        // Get world position of this body part
+                        const worldPos = new THREE.Vector3();
+                        child.getWorldPosition(worldPos);
+
+                        // Check distance to this specific body part
+                        const dist = bulletPos.distanceTo(worldPos);
+                        const hitRadius = 0.4; // Tight hit detection
+
+                        if (dist < hitRadius) {
+                            hitDetected = true;
+                            hitPart = child.userData.bodyPart || 'body';
+
+                            // Different damage multipliers per body part
+                            switch (hitPart) {
+                                case 'head':
+                                    damageMultiplier = 2.5; // Headshot!
+                                    showNotification('HEADSHOT! 2.5x');
+                                    break;
+                                case 'body':
+                                    damageMultiplier = 1.0; // Normal damage
+                                    break;
+                                case 'arm':
+                                case 'leg':
+                                    damageMultiplier = 0.5; // Limb shots do less
+                                    break;
+                                default:
+                                    damageMultiplier = 1.0;
+                            }
+                        }
+                    });
+
+                    if (hitDetected) {
+                        // Calculate final damage
+                        let damage = b.damage * damageMultiplier;
+
+                        // Check for critical hit (separate from headshot)
                         if (Math.random() * 100 < state.critChance) {
                             damage *= 2;
                             showNotification('CRITICAL HIT!');
@@ -1602,7 +1654,7 @@
 
                         z.takeDamage(damage);
 
-                        // Penetration: mark enemy as hit but don't kill bullet
+                        // Penetration handling
                         if (b.penetration) {
                             b.hitEnemies.add(z);
                         } else {
