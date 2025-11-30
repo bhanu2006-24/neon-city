@@ -282,11 +282,16 @@
             <div class="exp-bar-bg">
                 <div id="hud-exp-fill" class="exp-bar-fill"></div>
             </div>
+            <div style="margin-top: 10px; font-size: 16px; color: #0ff;">
+                WEAPON: <span id="hud-weapon">PISTOL</span><br>
+                AMMO: <span id="hud-ammo">12/12</span><br>
+                KILLS: <span id="hud-kills" style="color: #f00;">0</span>
+            </div>
         </div>
 
         <div id="hint-panel">
-            [WASD] Move &nbsp; [SPACE] Jump &nbsp; [L-Click] Shoot<br>
-            [B] Shop &nbsp; [K] Skills &nbsp; [ESC] Pause
+            [WASD] Move &nbsp; [SPACE] Jump &nbsp; [L-Click] Shoot &nbsp; [R] Reload<br>
+            [1-5] Switch Weapon &nbsp; [B] Shop &nbsp; [K] Skills &nbsp; [ESC] Pause
         </div>
 
         <div id="notification-area" class="notification">Level Up!</div>
@@ -306,8 +311,20 @@
             <button class="btn btn-gold" id="btn-buy-potion" onclick="buyPotion()">
                 Health Potion (50g)<br><small>Restore 50 HP</small>
             </button>
-            <button class="btn btn-gold" id="btn-buy-firerate" onclick="buyFireRate()">
-                Rapid Trigger (200g)<br><small>-10% Reload Time</small>
+            <button class="btn btn-gold" id="btn-buy-ammo" onclick="buyAmmo()">
+                Ammo Pack (30g)<br><small>Refill Current Weapon</small>
+            </button>
+            <button class="btn btn-gold" id="btn-buy-smg" onclick="buyWeapon('smg')">
+                SMG (300g)<br><small>Fast Fire Rate</small>
+            </button>
+            <button class="btn btn-gold" id="btn-buy-shotgun" onclick="buyWeapon('shotgun')">
+                Shotgun (500g)<br><small>Spread Damage</small>
+            </button>
+            <button class="btn btn-gold" id="btn-buy-sniper" onclick="buyWeapon('sniper')">
+                Sniper (800g)<br><small>High Damage</small>
+            </button>
+            <button class="btn btn-gold" id="btn-buy-plasma" onclick="buyWeapon('plasma')">
+                Plasma Rifle (1200g)<br><small>Piercing Shots</small>
             </button>
         </div>
         <p>Your Gold: <span id="shop-gold">0</span></p>
@@ -318,13 +335,34 @@
         <h2>SKILL TREE (Press K to Close)</h2>
         <div class="modal-content">
             <button class="btn btn-green" onclick="upgradeSkill('damage')">
-                Increase Damage<br><small>Cost: 1 SP</small>
+                Damage +20%<br><small>Cost: 1 SP</small>
             </button>
             <button class="btn btn-green" onclick="upgradeSkill('health')">
-                Max Health (+20)<br><small>Cost: 1 SP</small>
+                Max Health +20<br><small>Cost: 1 SP</small>
             </button>
             <button class="btn btn-green" onclick="upgradeSkill('speed')">
-                Move Speed (+5%)<br><small>Cost: 1 SP</small>
+                Move Speed +5%<br><small>Cost: 1 SP</small>
+            </button>
+            <button class="btn btn-green" onclick="upgradeSkill('critChance')">
+                Crit Chance +10%<br><small>Cost: 1 SP</small>
+            </button>
+            <button class="btn btn-green" onclick="upgradeSkill('dodge')">
+                Dodge +8%<br><small>Cost: 1 SP</small>
+            </button>
+            <button class="btn btn-green" onclick="upgradeSkill('regen')">
+                HP Regen +1/s<br><small>Cost: 1 SP</small>
+            </button>
+            <button class="btn btn-green" onclick="upgradeSkill('fireRate')">
+                Fire Rate +15%<br><small>Cost: 1 SP</small>
+            </button>
+            <button class="btn btn-green" onclick="upgradeSkill('resistance')">
+                Damage Resist +5%<br><small>Cost: 1 SP</small>
+            </button>
+            <button class="btn btn-green" onclick="upgradeSkill('xpBoost')">
+                XP Gain +20%<br><small>Cost: 1 SP</small>
+            </button>
+            <button class="btn btn-green" onclick="upgradeSkill('ammoEfficiency')">
+                Ammo Efficiency<br><small>Cost: 1 SP</small>
             </button>
         </div>
         <p>Available Points: <span id="skill-points">0</span></p>
@@ -336,8 +374,6 @@
             gravity: 30,
             playerSpeed: 15,
             playerJump: 15,
-            baseDamage: 25,
-            baseFireRate: 400, // ms
             colors: {
                 sky: 0x050510,
                 ground: 0x111111,
@@ -346,6 +382,15 @@
                 zombie: 0x00ff00,
                 bullet: 0xffff00
             }
+        };
+
+        // Weapon Definitions
+        const WEAPONS = {
+            pistol: { name: 'PISTOL', damage: 25, fireRate: 400, bulletSpeed: 40, bulletColor: 0xffff00, magazineSize: 12, reloadTime: 1.5, cost: 0, spread: 0, penetration: false },
+            smg: { name: 'SMG', damage: 15, fireRate: 150, bulletSpeed: 45, bulletColor: 0xff6600, magazineSize: 30, reloadTime: 2.0, cost: 300, spread: 0.05, penetration: false },
+            shotgun: { name: 'SHOTGUN', damage: 20, fireRate: 800, bulletSpeed: 35, bulletColor: 0xff0000, magazineSize: 8, reloadTime: 2.5, cost: 500, spread: 0.15, pelletsPerShot: 5, penetration: false },
+            sniper: { name: 'SNIPER', damage: 100, fireRate: 1200, bulletSpeed: 80, bulletColor: 0x00ffff, magazineSize: 5, reloadTime: 3.0, cost: 800, spread: 0, penetration: true },
+            plasma: { name: 'PLASMA', damage: 35, fireRate: 300, bulletSpeed: 50, bulletColor: 0xff00ff, magazineSize: 20, reloadTime: 2.0, cost: 1200, spread: 0, penetration: true }
         };
 
         const state = {
@@ -360,40 +405,54 @@
             enemiesRemaining: 0,
             enemiesToSpawn: 0,
             lastShot: 0,
-            fireRate: CONFIG.baseFireRate,
-            damage: CONFIG.baseDamage,
-            speedMult: 1.0,
             isPaused: true,
             isGameOver: false,
-            canShoot: true
+            canShoot: true,
+            // Weapon stats
+            currentWeapon: 'pistol',
+            currentAmmo: 12,
+            isReloading: false,
+            ownedWeapons: ['pistol'],
+            // Player stats
+            kills: 0,
+            critChance: 0,
+            dodgeChance: 0,
+            regenRate: 0,
+            fireRateMult: 1.0,
+            damageResist: 0,
+            xpMult: 1.0,
+            ammoEfficiency: 0,
+            speedMult: 1.0
         };
 
         // --- THREE.JS SETUP ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(CONFIG.colors.sky);
-        scene.fog = new THREE.Fog(CONFIG.colors.sky, 10, 80); // Fog creates atmosphere and hides draw distance
+        scene.fog = new THREE.Fog(CONFIG.colors.sky, 10, 60); // Reduced fog distance for performance
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.y = 1.6; // Eye level
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Better quality, reasonable performance
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        // Lighting - Reduced for performance
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); // Increased ambient to compensate
         scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6); // Reduced intensity
         dirLight.position.set(50, 100, 50);
         dirLight.castShadow = true;
+        // Reduced shadow map size for performance
         dirLight.shadow.camera.left = -50;
         dirLight.shadow.camera.right = 50;
         dirLight.shadow.camera.top = 50;
         dirLight.shadow.camera.bottom = -50;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.mapSize.width = 1024; // Reduced from 2048
+        dirLight.shadow.mapSize.height = 1024;
         scene.add(dirLight);
 
         // Controls
@@ -409,38 +468,105 @@
         ground.receiveShadow = true;
         scene.add(ground);
 
-        // City Generation
+        // City Generation - OPTIMIZED
         const buildings = [];
-        const citySize = 10; // 10x10 blocks
+        const environmentObjects = [];
+        const citySize = 8; // Reduced from 10 for better performance
         const blockSize = 20;
         const streetWidth = 15;
+        let pointLightCount = 0;
+        const MAX_POINT_LIGHTS = 8; // Limit point lights for performance
 
         function createCity() {
-            const geometry = new THREE.BoxGeometry(10, 1, 10);
-            const material = new THREE.MeshStandardMaterial({ color: CONFIG.colors.building });
-            const edgeMaterial = new THREE.LineBasicMaterial({ color: CONFIG.colors.buildingRim });
+            const buildingColors = [0x222222, 0x1a0033, 0x001a33, 0x331a00];
+            const neonColors = [0x00ffff, 0xff00ff, 0xff0000, 0x00ff00, 0xffff00];
 
             for (let x = -citySize; x <= citySize; x++) {
                 for (let z = -citySize; z <= citySize; z++) {
                     // Don't build on start area
                     if (Math.abs(x) < 2 && Math.abs(z) < 2) continue;
 
-                    // Random Height Building
-                    const height = Math.random() * 20 + 10;
+                    // Random Height Building with varied colors
+                    const height = Math.random() * 25 + 10;
                     const bGeo = new THREE.BoxGeometry(12, height, 12);
+                    const buildingColor = buildingColors[Math.floor(Math.random() * buildingColors.length)];
+                    const material = new THREE.MeshStandardMaterial({ color: buildingColor, roughness: 0.7 });
                     const building = new THREE.Mesh(bGeo, material);
-                    building.position.set(x * (blockSize + streetWidth), height / 2, z * (blockSize + streetWidth));
-                    building.castShadow = true;
-                    building.receiveShadow = true;
+                    const posX = x * (blockSize + streetWidth);
+                    const posZ = z * (blockSize + streetWidth);
+                    building.position.set(posX, height / 2, posZ);
+
+                    // Only cast shadows for nearby buildings to improve performance
+                    const distFromCenter = Math.sqrt(x * x + z * z);
+                    if (distFromCenter < 5) {
+                        building.castShadow = true;
+                        building.receiveShadow = true;
+                    }
+
                     scene.add(building);
                     buildings.push(building);
 
-                    // Neon Edges
+                    // Neon Edges with varied colors
+                    const neonColor = neonColors[Math.floor(Math.random() * neonColors.length)];
+                    const edgeMaterial = new THREE.LineBasicMaterial({ color: neonColor });
                     const edges = new THREE.EdgesGeometry(bGeo);
                     const line = new THREE.LineSegments(edges, edgeMaterial);
                     building.add(line);
+
+                    // DRASTICALLY reduced point lights - only on very few buildings
+                    if (Math.random() > 0.95 && pointLightCount < MAX_POINT_LIGHTS) {
+                        const pointLight = new THREE.PointLight(neonColor, 1.5, 25); // Reduced intensity and range
+                        pointLight.position.set(posX, height + 2, posZ);
+                        scene.add(pointLight);
+                        pointLightCount++;
+                    }
+
+                    // Fewer street lights
+                    if (Math.random() > 0.92 && distFromCenter < 6) {
+                        createStreetLight(posX + 10, posZ + 10);
+                    }
+
+                    // Fewer cars - only near center
+                    if (Math.random() > 0.92 && distFromCenter > 3 && distFromCenter < 7) {
+                        createCar(posX + (Math.random() - 0.5) * 15, posZ + (Math.random() - 0.5) * 15);
+                    }
                 }
             }
+        }
+
+        function createStreetLight(x, z) {
+            // Pole
+            const poleGeo = new THREE.CylinderGeometry(0.2, 0.2, 5);
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const pole = new THREE.Mesh(poleGeo, poleMat);
+            pole.position.set(x, 2.5, z);
+            // Don't cast shadows for performance
+            scene.add(pole);
+
+            // Light
+            const lightGeo = new THREE.SphereGeometry(0.3);
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+            const light = new THREE.Mesh(lightGeo, lightMat);
+            light.position.set(x, 5, z);
+            scene.add(light);
+
+            // No actual point light - use emissive material instead for performance
+            environmentObjects.push(pole, light);
+        }
+
+        function createCar(x, z) {
+            const carColors = [0x333333, 0x660000, 0x000066, 0x006600];
+            const color = carColors[Math.floor(Math.random() * carColors.length)];
+
+            const bodyGeo = new THREE.BoxGeometry(2, 1, 4);
+            const carMat = new THREE.MeshStandardMaterial({ color: color, metalness: 0.6, roughness: 0.4 });
+            const body = new THREE.Mesh(bodyGeo, carMat);
+            body.position.set(x, 0.5, z);
+            body.rotation.y = Math.random() * Math.PI * 2;
+            // Don't cast shadows for performance
+            scene.add(body);
+
+            environmentObjects.push(body);
         }
         createCity();
 
@@ -467,17 +593,28 @@
         let bullets = [];
         let zombies = [];
         let particles = [];
+        let pickups = [];
 
         class Bullet {
-            constructor(position, quaternion) {
+            constructor(position, quaternion, weaponData, spread = 0) {
                 const geo = new THREE.SphereGeometry(0.05);
-                const mat = new THREE.MeshBasicMaterial({ color: CONFIG.colors.bullet });
+                const mat = new THREE.MeshBasicMaterial({ color: weaponData.bulletColor });
                 this.mesh = new THREE.Mesh(geo, mat);
                 this.mesh.position.copy(position);
                 this.mesh.quaternion.copy(quaternion);
-                this.speed = 40;
+
+                // Apply bullet spread
+                if (spread > 0) {
+                    this.mesh.rotateY((Math.random() - 0.5) * spread);
+                    this.mesh.rotateX((Math.random() - 0.5) * spread);
+                }
+
+                this.speed = weaponData.bulletSpeed;
+                this.damage = weaponData.damage;
+                this.penetration = weaponData.penetration;
                 this.alive = true;
-                this.life = 2.0; // seconds
+                this.life = 3.0; // seconds
+                this.hitEnemies = new Set(); // Track hit enemies for penetration
 
                 // Start slightly ahead of camera
                 this.mesh.translateZ(-0.5);
@@ -489,10 +626,6 @@
                 this.mesh.translateZ(-this.speed * dt);
                 this.life -= dt;
                 if (this.life <= 0) this.kill();
-
-                // Simple collision with buildings
-                // Raycasting is expensive, simple distance check for this demo
-                // Or simply let them pass through buildings for simplicity
             }
 
             kill() {
@@ -503,28 +636,44 @@
         }
 
         class Zombie {
-            constructor(position) {
-                this.hp = 50 + (state.wave * 10);
+            constructor(position, isBoss = false) {
+                this.type = 'zombie';
+                this.isBoss = isBoss;
+                this.hp = (isBoss ? 300 : 50) + (state.wave * (isBoss ? 50 : 10));
                 this.maxHp = this.hp;
-                this.speed = 4 + (state.wave * 0.2);
-                this.damage = 10;
+                this.speed = (isBoss ? 3 : 4) + (state.wave * 0.2);
+                this.damage = isBoss ? 25 : 10;
+                this.expReward = isBoss ? 100 : 20;
+                this.goldReward = isBoss ? 50 + state.wave * 5 : 10 + state.wave;
 
-                const geo = new THREE.BoxGeometry(0.8, 1.8, 0.8);
-                const mat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.zombie });
+                const size = isBoss ? 1.5 : 1.0;
+                const geo = new THREE.BoxGeometry(0.8 * size, 1.8 * size, 0.8 * size);
+                const color = isBoss ? 0xff0000 : CONFIG.colors.zombie;
+                const mat = new THREE.MeshStandardMaterial({ color: color });
                 this.mesh = new THREE.Mesh(geo, mat);
                 this.mesh.position.copy(position);
-                this.mesh.position.y = 0.9; // Half height
+                this.mesh.position.y = 0.9 * size; // Half height
                 this.mesh.castShadow = true;
 
                 // Eyes
-                const eyeGeo = new THREE.BoxGeometry(0.2, 0.1, 0.1);
-                const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const eyeGeo = new THREE.BoxGeometry(0.2 * size, 0.1 * size, 0.1 * size);
+                const eyeColor = isBoss ? 0xffff00 : 0xff0000;
+                const eyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
                 const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-                leftEye.position.set(-0.2, 0.6, 0.4);
+                leftEye.position.set(-0.2 * size, 0.6 * size, 0.4 * size);
                 const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-                rightEye.position.set(0.2, 0.6, 0.4);
+                rightEye.position.set(0.2 * size, 0.6 * size, 0.4 * size);
                 this.mesh.add(leftEye);
                 this.mesh.add(rightEye);
+
+                // Boss crown
+                if (isBoss) {
+                    const crownGeo = new THREE.ConeGeometry(0.3, 0.5, 4);
+                    const crownMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+                    const crown = new THREE.Mesh(crownGeo, crownMat);
+                    crown.position.set(0, 1.5, 0);
+                    this.mesh.add(crown);
+                }
 
                 scene.add(this.mesh);
                 this.alive = true;
@@ -560,14 +709,190 @@
                 this.alive = false;
                 scene.remove(this.mesh);
                 state.enemiesRemaining--;
-                addExp(20);
-                addGold(10 + state.wave);
-                createParticles(this.mesh.position, 0x00ff00, 10);
+                state.kills++;
+                addExp(Math.floor(this.expReward * state.xpMult));
+                addGold(this.goldReward);
+                createParticles(this.mesh.position, this.isBoss ? 0xff0000 : 0x00ff00, this.isBoss ? 20 : 10);
+
+                // Boss drops better loot
+                if (this.isBoss && Math.random() > 0.5) {
+                    createPickup(this.mesh.position, 'ammo');
+                }
+            }
+        }
+
+        // New Enemy Types
+        class Runner {
+            constructor(position) {
+                this.type = 'runner';
+                this.hp = 30 + (state.wave * 5);
+                this.maxHp = this.hp;
+                this.speed = 8 + (state.wave * 0.3);
+                this.damage = 5;
+                this.expReward = 15;
+                this.goldReward = 5 + state.wave;
+
+                const geo = new THREE.BoxGeometry(0.5, 1.2, 0.5);
+                const mat = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+                this.mesh = new THREE.Mesh(geo, mat);
+                this.mesh.position.copy(position);
+                this.mesh.position.y = 0.6;
+                this.mesh.castShadow = true;
+                scene.add(this.mesh);
+                this.alive = true;
+            }
+
+            update(dt, playerPos) {
+                if (!this.alive) return;
+                const dir = new THREE.Vector3().subVectors(playerPos, this.mesh.position).normalize();
+                dir.y = 0;
+                this.mesh.position.add(dir.multiplyScalar(this.speed * dt));
+                this.mesh.lookAt(playerPos.x, this.mesh.position.y, playerPos.z);
+
+                const dist = this.mesh.position.distanceTo(playerPos);
+                if (dist < 1.2) takeDamage(this.damage * dt);
+            }
+
+            takeDamage(amount) {
+                this.hp -= amount;
+                this.mesh.material.emissive.setHex(0xffffff);
+                setTimeout(() => { if (this.alive) this.mesh.material.emissive.setHex(0x000000); }, 50);
+                if (this.hp <= 0) this.die();
+            }
+
+            die() {
+                this.alive = false;
+                scene.remove(this.mesh);
+                state.enemiesRemaining--;
+                state.kills++;
+                addExp(Math.floor(this.expReward * state.xpMult));
+                addGold(this.goldReward);
+                createParticles(this.mesh.position, 0xffff00, 5);
+            }
+        }
+
+        class Tank {
+            constructor(position) {
+                this.type = 'tank';
+                this.hp = 150 + (state.wave * 30);
+                this.maxHp = this.hp;
+                this.speed = 2 + (state.wave * 0.1);
+                this.damage = 20;
+                this.expReward = 40;
+                this.goldReward = 20 + state.wave * 2;
+
+                const geo = new THREE.BoxGeometry(1.2, 2.2, 1.2);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x666666 });
+                this.mesh = new THREE.Mesh(geo, mat);
+                this.mesh.position.copy(position);
+                this.mesh.position.y = 1.1;
+                this.mesh.castShadow = true;
+                scene.add(this.mesh);
+                this.alive = true;
+            }
+
+            update(dt, playerPos) {
+                if (!this.alive) return;
+                const dir = new THREE.Vector3().subVectors(playerPos, this.mesh.position).normalize();
+                dir.y = 0;
+                this.mesh.position.add(dir.multiplyScalar(this.speed * dt));
+                this.mesh.lookAt(playerPos.x, this.mesh.position.y, playerPos.z);
+
+                const dist = this.mesh.position.distanceTo(playerPos);
+                if (dist < 1.8) takeDamage(this.damage * dt);
+            }
+
+            takeDamage(amount) {
+                // Tanks take reduced damage
+                this.hp -= amount * 0.7;
+                this.mesh.material.emissive.setHex(0xffffff);
+                setTimeout(() => { if (this.alive) this.mesh.material.emissive.setHex(0x000000); }, 50);
+                if (this.hp <= 0) this.die();
+            }
+
+            die() {
+                this.alive = false;
+                scene.remove(this.mesh);
+                state.enemiesRemaining--;
+                state.kills++;
+                addExp(Math.floor(this.expReward * state.xpMult));
+                addGold(this.goldReward);
+                createParticles(this.mesh.position, 0x666666, 15);
+                if (Math.random() > 0.7) createPickup(this.mesh.position, 'health');
+            }
+        }
+
+        class Exploder {
+            constructor(position) {
+                this.type = 'exploder';
+                this.hp = 40 + (state.wave * 8);
+                this.maxHp = this.hp;
+                this.speed = 6 + (state.wave * 0.25);
+                this.damage = 40;
+                this.explosionRadius = 5;
+                this.expReward = 25;
+                this.goldReward = 15 + state.wave;
+
+                const geo = new THREE.SphereGeometry(0.6);
+                const mat = new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0xff3300, emissiveIntensity: 0.5 });
+                this.mesh = new THREE.Mesh(geo, mat);
+                this.mesh.position.copy(position);
+                this.mesh.position.y = 0.6;
+                this.mesh.castShadow = true;
+                scene.add(this.mesh);
+                this.alive = true;
+                this.pulseTime = 0;
+            }
+
+            update(dt, playerPos) {
+                if (!this.alive) return;
+
+                // Pulsing effect
+                this.pulseTime += dt * 5;
+                this.mesh.material.emissiveIntensity = 0.5 + Math.sin(this.pulseTime) * 0.3;
+
+                const dir = new THREE.Vector3().subVectors(playerPos, this.mesh.position).normalize();
+                dir.y = 0;
+                this.mesh.position.add(dir.multiplyScalar(this.speed * dt));
+
+                const dist = this.mesh.position.distanceTo(playerPos);
+                if (dist < 2.5) this.explode(playerPos);
+            }
+
+            takeDamage(amount) {
+                this.hp -= amount;
+                if (this.hp <= 0) this.explode(camera.position);
+            }
+
+            explode(playerPos) {
+                if (!this.alive) return;
+                this.alive = false;
+
+                // Check if player is in radius
+                const dist = this.mesh.position.distanceTo(playerPos);
+                if (dist < this.explosionRadius) {
+                    takeDamage(this.damage * (1 - dist / this.explosionRadius));
+                }
+
+                createParticles(this.mesh.position, 0xff6600, 25);
+                scene.remove(this.mesh);
+                state.enemiesRemaining--;
+                state.kills++;
+                addExp(Math.floor(this.expReward * state.xpMult));
+                addGold(this.goldReward);
+            }
+
+            die() {
+                this.explode(camera.position);
             }
         }
 
         function createParticles(pos, color, count) {
-            for (let i = 0; i < count; i++) {
+            // Limit total particles for performance
+            if (particles.length > 100) return;
+
+            const actualCount = Math.min(count, 15); // Cap individual particle bursts
+            for (let i = 0; i < actualCount; i++) {
                 const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
                 const mat = new THREE.MeshBasicMaterial({ color: color });
                 const mesh = new THREE.Mesh(geo, mat);
@@ -581,6 +906,18 @@
                 particles.push({ mesh, vel, life: 1.0 });
                 scene.add(mesh);
             }
+        }
+
+        // Pickup System
+        function createPickup(pos, type) {
+            const geo = type === 'health' ? new THREE.SphereGeometry(0.3) : new THREE.BoxGeometry(0.4, 0.4, 0.4);
+            const color = type === 'health' ? 0x00ff00 : 0xffaa00;
+            const mat = new THREE.MeshBasicMaterial({ color: color });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(pos);
+            mesh.position.y = 0.5;
+            scene.add(mesh);
+            pickups.push({ mesh, type, bobTime: 0 });
         }
 
         // --- GAME LOGIC ---
@@ -600,6 +937,12 @@
                 case 'Space': if (canJump) velocity.y = CONFIG.playerJump; canJump = false; break;
                 case 'KeyB': toggleModal('shop-modal'); break;
                 case 'KeyK': toggleModal('skill-modal'); break;
+                case 'KeyR': reloadWeapon(); break;
+                case 'Digit1': switchWeapon('pistol'); break;
+                case 'Digit2': switchWeapon('smg'); break;
+                case 'Digit3': switchWeapon('shotgun'); break;
+                case 'Digit4': switchWeapon('sniper'); break;
+                case 'Digit5': switchWeapon('plasma'); break;
             }
         });
 
@@ -613,23 +956,66 @@
         });
 
         document.addEventListener('mousedown', () => {
-            if (state.isPaused || !state.canShoot) return;
+            if (state.isPaused || !state.canShoot || state.isReloading) return;
+            const weapon = WEAPONS[state.currentWeapon];
             const now = Date.now();
-            if (now - state.lastShot > state.fireRate) {
+            const fireRate = weapon.fireRate / state.fireRateMult;
+
+            if (now - state.lastShot > fireRate && state.currentAmmo > 0) {
                 shoot();
                 state.lastShot = now;
             }
         });
 
+        function switchWeapon(weaponId) {
+            if (state.isPaused || !state.ownedWeapons.includes(weaponId)) return;
+            state.currentWeapon = weaponId;
+            const weapon = WEAPONS[weaponId];
+            state.currentAmmo = weapon.magazineSize;
+            updateHUD();
+            showNotification(`Switched to ${weapon.name}`);
+        }
+
+        function reloadWeapon() {
+            if (state.isPaused || state.isReloading) return;
+            const weapon = WEAPONS[state.currentWeapon];
+            if (state.currentAmmo >= weapon.magazineSize) return;
+
+            state.isReloading = true;
+            state.canShoot = false;
+            showNotification('Reloading...');
+
+            setTimeout(() => {
+                state.currentAmmo = weapon.magazineSize;
+                state.isReloading = false;
+                state.canShoot = true;
+                updateHUD();
+            }, weapon.reloadTime * 1000);
+        }
+
         function shoot() {
+            const weapon = WEAPONS[state.currentWeapon];
+
+            // Consume ammo (with efficiency chance to not consume)
+            if (Math.random() > state.ammoEfficiency / 100) {
+                state.currentAmmo--;
+            }
+
             // Recoil
-            gunGroup.position.z = 0.2; // Move back
+            gunGroup.position.z = 0.2;
 
-            // Bullet
-            bullets.push(new Bullet(camera.position, camera.quaternion));
+            // Shotgun shoots multiple pellets
+            const pelletsPerShot = weapon.pelletsPerShot || 1;
+            for (let i = 0; i < pelletsPerShot; i++) {
+                bullets.push(new Bullet(camera.position, camera.quaternion, weapon, weapon.spread));
+            }
 
-            // Check Hitscan (for instant visual feedback mostly, logic uses projectiles)
-            // But for this game, we rely on the Bullet update loop for collision
+            updateHUD();
+
+            // Auto-reload when empty
+            if (state.currentAmmo <= 0) {
+                reloadWeapon();
+            }
         }
 
         // Wave Management
@@ -637,20 +1023,53 @@
             state.enemiesToSpawn = 3 + Math.floor(state.wave * 1.5);
             state.enemiesRemaining = state.enemiesToSpawn;
 
+            // Boss wave every 5 waves
+            const isBossWave = state.wave % 5 === 0;
+            if (isBossWave) {
+                showNotification(`BOSS WAVE ${state.wave}!`);
+            }
+
             const spawnInterval = setInterval(() => {
-                if (state.isPaused) return; // Don't spawn if paused
+                if (state.isPaused) return;
                 if (state.enemiesToSpawn <= 0) {
                     clearInterval(spawnInterval);
                     return;
                 }
 
-                // Spawn Randomly away from player
+                // Spawn position
                 const angle = Math.random() * Math.PI * 2;
                 const dist = 30 + Math.random() * 20;
                 const x = camera.position.x + Math.cos(angle) * dist;
                 const z = camera.position.z + Math.sin(angle) * dist;
+                const spawnPos = new THREE.Vector3(x, 0, z);
 
-                zombies.push(new Zombie(new THREE.Vector3(x, 0, z)));
+                // Determine enemy type based on wave
+                if (isBossWave && state.enemiesToSpawn === Math.floor(3 + state.wave * 1.5)) {
+                    // Spawn boss at beginning of boss wave
+                    zombies.push(new Zombie(spawnPos, true));
+                } else {
+                    const rand = Math.random();
+                    if (state.wave < 3) {
+                        // Early waves: mostly zombies
+                        zombies.push(new Zombie(spawnPos));
+                    } else if (state.wave < 6) {
+                        // Mid waves: add runners
+                        if (rand < 0.7) zombies.push(new Zombie(spawnPos));
+                        else zombies.push(new Runner(spawnPos));
+                    } else if (state.wave < 10) {
+                        // Later waves: add tanks and exploders
+                        if (rand < 0.4) zombies.push(new Zombie(spawnPos));
+                        else if (rand < 0.7) zombies.push(new Runner(spawnPos));
+                        else if (rand < 0.85) zombies.push(new Tank(spawnPos));
+                        else zombies.push(new Exploder(spawnPos));
+                    } else {
+                        // Late game: all enemy types
+                        if (rand < 0.3) zombies.push(new Zombie(spawnPos));
+                        else if (rand < 0.55) zombies.push(new Runner(spawnPos));
+                        else if (rand < 0.75) zombies.push(new Tank(spawnPos));
+                        else zombies.push(new Exploder(spawnPos));
+                    }
+                }
                 state.enemiesToSpawn--;
             }, 1000);
         }
@@ -675,7 +1094,15 @@
         }
 
         function takeDamage(amount) {
-            state.hp -= amount;
+            // Apply dodge chance
+            if (Math.random() * 100 < state.dodgeChance) {
+                showNotification('DODGED!');
+                return;
+            }
+
+            // Apply damage resistance
+            const actualDamage = amount * (1 - state.damageResist / 100);
+            state.hp -= actualDamage;
 
             // Flash red
             const overlay = document.getElementById('damage-overlay');
@@ -685,7 +1112,7 @@
             if (state.hp <= 0 && !state.isGameOver) {
                 state.isGameOver = true;
                 controls.unlock();
-                alert(`GAME OVER\nYou reached Wave ${state.wave}\nRefresh to restart.`);
+                alert(`GAME OVER\nWave Reached: ${state.wave}\nKills: ${state.kills}\nRefresh to restart.`);
                 location.reload();
             }
             updateHUD();
@@ -710,17 +1137,44 @@
             document.getElementById('shop-gold').innerText = state.gold;
             document.getElementById('skill-points').innerText = state.skillPoints;
 
-            // Disable logic
+            // Disable shop items based on gold
             document.getElementById('btn-buy-potion').disabled = state.gold < 50;
-            document.getElementById('btn-buy-firerate').disabled = state.gold < 200;
+            document.getElementById('btn-buy-ammo').disabled = state.gold < 30;
+            document.getElementById('btn-buy-smg').disabled = state.gold < 300 || state.ownedWeapons.includes('smg');
+            document.getElementById('btn-buy-shotgun').disabled = state.gold < 500 || state.ownedWeapons.includes('shotgun');
+            document.getElementById('btn-buy-sniper').disabled = state.gold < 800 || state.ownedWeapons.includes('sniper');
+            document.getElementById('btn-buy-plasma').disabled = state.gold < 1200 || state.ownedWeapons.includes('plasma');
         }
 
         window.buyPotion = () => {
             if (state.gold >= 50) {
                 state.gold -= 50;
                 state.hp = Math.min(state.hp + 50, state.maxHp);
+                showNotification('+50 HP');
                 updateHUD();
                 updateMenus();
+            }
+        };
+
+        window.buyAmmo = () => {
+            if (state.gold >= 30) {
+                state.gold -= 30;
+                const weapon = WEAPONS[state.currentWeapon];
+                state.currentAmmo = weapon.magazineSize;
+                showNotification('Ammo Refilled!');
+                updateHUD();
+                updateMenus();
+            }
+        };
+
+        window.buyWeapon = (weaponId) => {
+            const weapon = WEAPONS[weaponId];
+            if (state.gold >= weapon.cost && !state.ownedWeapons.includes(weaponId)) {
+                state.gold -= weapon.cost;
+                state.ownedWeapons.push(weaponId);
+                showNotification(`${weapon.name} Purchased!`);
+                updateMenus();
+                updateHUD();
             }
         };
 
@@ -736,9 +1190,51 @@
         window.upgradeSkill = (type) => {
             if (state.skillPoints > 0) {
                 state.skillPoints--;
-                if (type === 'damage') state.damage *= 1.2;
-                if (type === 'health') { state.maxHp += 20; state.hp += 20; }
-                if (type === 'speed') state.speedMult += 0.05;
+
+                switch (type) {
+                    case 'damage':
+                        WEAPONS[state.currentWeapon].damage *= 1.2;
+                        showNotification('Damage Increased!');
+                        break;
+                    case 'health':
+                        state.maxHp += 20;
+                        state.hp += 20;
+                        showNotification('Max HP +20!');
+                        break;
+                    case 'speed':
+                        state.speedMult += 0.05;
+                        showNotification('Speed Increased!');
+                        break;
+                    case 'critChance':
+                        state.critChance += 10;
+                        showNotification('Crit Chance +10%!');
+                        break;
+                    case 'dodge':
+                        state.dodgeChance += 8;
+                        showNotification('Dodge +8%!');
+                        break;
+                    case 'regen':
+                        state.regenRate += 1;
+                        showNotification('Regen +1 HP/s!');
+                        break;
+                    case 'fireRate':
+                        state.fireRateMult += 0.15;
+                        showNotification('Fire Rate +15%!');
+                        break;
+                    case 'resistance':
+                        state.damageResist += 5;
+                        showNotification('Damage Resist +5%!');
+                        break;
+                    case 'xpBoost':
+                        state.xpMult += 0.2;
+                        showNotification('XP Gain +20%!');
+                        break;
+                    case 'ammoEfficiency':
+                        state.ammoEfficiency += 20;
+                        showNotification('Ammo Efficiency +20%!');
+                        break;
+                }
+
                 updateHUD();
                 updateMenus();
             }
@@ -764,6 +1260,12 @@
             document.getElementById('hud-exp-fill').style.width = expPct + '%';
 
             document.getElementById('wave-panel').innerText = "WAVE " + state.wave;
+
+            // Weapon info
+            const weapon = WEAPONS[state.currentWeapon];
+            document.getElementById('hud-weapon').innerText = weapon.name;
+            document.getElementById('hud-ammo').innerText = state.currentAmmo + '/' + weapon.magazineSize;
+            document.getElementById('hud-kills').innerText = state.kills;
         }
 
         // --- MAIN LOOP ---
@@ -822,54 +1324,93 @@
                 canJump = true;
             }
 
-            // Building Collision (Simple bounding box check against current block)
-            // For this version, we will trust the player not to walk through walls or 
-            // implement a very basic pushback if x/z is inside a building block
-            buildings.forEach(b => {
-                const box = new THREE.Box3().setFromObject(b);
-                const playerPos = camera.position.clone();
-                playerPos.y = b.position.y; // Ignore height for wall check
+            // Building Collision - OPTIMIZED with spatial awareness
+            // Only check buildings near the player
+            const playerGridX = Math.floor(camera.position.x / (blockSize + streetWidth));
+            const playerGridZ = Math.floor(camera.position.z / (blockSize + streetWidth));
+            const checkRadius = 2; // Only check nearby grid cells
 
-                // Expand box slightly for collision radius
-                box.expandByScalar(0.5);
+            for (let offsetX = -checkRadius; offsetX <= checkRadius; offsetX++) {
+                for (let offsetZ = -checkRadius; offsetZ <= checkRadius; offsetZ++) {
+                    const gridX = playerGridX + offsetX;
+                    const gridZ = playerGridZ + offsetZ;
 
-                if (box.containsPoint(playerPos)) {
-                    // Push back - simple naive approach
-                    const dir = new THREE.Vector3().subVectors(camera.position, b.position).normalize();
-                    dir.y = 0;
-                    controls.moveRight(dir.x * 0.2); // Nudge
-                    controls.moveForward(dir.z * 0.2);
+                    // Skip if outside city bounds
+                    if (Math.abs(gridX) > citySize || Math.abs(gridZ) > citySize) continue;
+                    if (Math.abs(gridX) < 2 && Math.abs(gridZ) < 2) continue;
+
+                    // Calculate building index (approximate)
+                    const buildingIndex = (gridX + citySize) * (citySize * 2 + 1) + (gridZ + citySize);
+                    const b = buildings[buildingIndex];
+
+                    if (b) {
+                        const box = new THREE.Box3().setFromObject(b);
+                        const playerPos = camera.position.clone();
+                        playerPos.y = b.position.y;
+                        box.expandByScalar(0.5);
+
+                        if (box.containsPoint(playerPos)) {
+                            const dir = new THREE.Vector3().subVectors(camera.position, b.position).normalize();
+                            dir.y = 0;
+                            controls.moveRight(dir.x * 0.2);
+                            controls.moveForward(dir.z * 0.2);
+                        }
+                    }
                 }
-            });
+            }
 
             // 2. Gun Animation
             gunGroup.position.z += (0 - gunGroup.position.z) * 10 * delta; // Return to pos
 
-            // 3. Bullets
+            // 3. Health Regeneration
+            if (state.regenRate > 0) {
+                state.hp = Math.min(state.hp + state.regenRate * delta, state.maxHp);
+                updateHUD();
+            }
+
+            // 4. Bullets
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.update(delta);
 
-                // Zombie Collision
+                // Zombie Collision - Check all enemy types
                 for (let j = zombies.length - 1; j >= 0; j--) {
                     let z = zombies[j];
-                    if (z.alive && b.alive && b.mesh.position.distanceTo(z.mesh.position) < 1.0) {
-                        z.takeDamage(state.damage);
-                        b.kill();
+                    if (z.alive && b.alive && !b.hitEnemies.has(z) && b.mesh.position.distanceTo(z.mesh.position) < 1.0) {
+                        // Apply critical hit
+                        let damage = b.damage;
+                        if (Math.random() * 100 < state.critChance) {
+                            damage *= 2;
+                            showNotification('CRITICAL HIT!');
+                        }
+
+                        z.takeDamage(damage);
+
+                        // Penetration: mark enemy as hit but don't kill bullet
+                        if (b.penetration) {
+                            b.hitEnemies.add(z);
+                        } else {
+                            b.kill();
+                        }
+
                         createParticles(b.mesh.position, 0xffff00, 3);
-                        break;
+                        if (!b.penetration) break;
                     }
                 }
 
                 if (!b.alive) bullets.splice(i, 1);
             }
 
-            // 4. Zombies
+            // 5. Zombies
             if (zombies.length === 0 && state.enemiesToSpawn === 0) {
                 // Wave Complete
                 state.wave++;
                 showNotification(`WAVE ${state.wave} STARTED`);
                 startWave();
+                // Random pickup spawn on wave complete
+                if (Math.random() > 0.6) {
+                    createPickup(camera.position.clone().add(new THREE.Vector3(5, 0, 5)), Math.random() > 0.5 ? 'health' : 'ammo');
+                }
             }
 
             for (let i = zombies.length - 1; i >= 0; i--) {
@@ -878,7 +1419,31 @@
                 if (!z.alive) zombies.splice(i, 1);
             }
 
-            // 5. Particles
+            // 6. Pickups - bobbing and collection
+            for (let i = pickups.length - 1; i >= 0; i--) {
+                let p = pickups[i];
+                p.bobTime += delta;
+                p.mesh.position.y = 0.5 + Math.sin(p.bobTime * 3) * 0.2;
+                p.mesh.rotation.y += delta * 2;
+
+                // Check collection
+                const dist = camera.position.distanceTo(p.mesh.position);
+                if (dist < 2) {
+                    if (p.type === 'health') {
+                        state.hp = Math.min(state.hp + 30, state.maxHp);
+                        showNotification('+30 HP');
+                    } else if (p.type === 'ammo') {
+                        const weapon = WEAPONS[state.currentWeapon];
+                        state.currentAmmo = weapon.magazineSize;
+                        showNotification('Ammo Refilled!');
+                    }
+                    scene.remove(p.mesh);
+                    pickups.splice(i, 1);
+                    updateHUD();
+                }
+            }
+
+            // 7. Particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 p.life -= delta;
