@@ -647,34 +647,79 @@
                 this.goldReward = isBoss ? 50 + state.wave * 5 : 10 + state.wave;
 
                 const size = isBoss ? 1.5 : 1.0;
-                const geo = new THREE.BoxGeometry(0.8 * size, 1.8 * size, 0.8 * size);
                 const color = isBoss ? 0xff0000 : CONFIG.colors.zombie;
-                const mat = new THREE.MeshStandardMaterial({ color: color });
-                this.mesh = new THREE.Mesh(geo, mat);
-                this.mesh.position.copy(position);
-                this.mesh.position.y = 0.9 * size; // Half height
-                this.mesh.castShadow = true;
 
-                // Eyes
-                const eyeGeo = new THREE.BoxGeometry(0.2 * size, 0.1 * size, 0.1 * size);
+                // Create detailed zombie model
+                this.mesh = new THREE.Group();
+
+                // Legs - at bottom
+                const legGeo = new THREE.BoxGeometry(0.2 * size, 0.6 * size, 0.2 * size);
+                const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.8 });
+                const leftLeg = new THREE.Mesh(legGeo, mat);
+                leftLeg.position.set(-0.15 * size, 0.3 * size, 0);
+                this.mesh.add(leftLeg);
+                const rightLeg = new THREE.Mesh(legGeo, mat);
+                rightLeg.position.set(0.15 * size, 0.3 * size, 0);
+                this.mesh.add(rightLeg);
+
+                // Torso - above legs
+                const torsoGeo = new THREE.BoxGeometry(0.5 * size, 0.7 * size, 0.35 * size);
+                const torso = new THREE.Mesh(torsoGeo, mat);
+                torso.position.y = 0.95 * size;
+                this.mesh.add(torso);
+
+                // Head - on top of torso
+                const headGeo = new THREE.BoxGeometry(0.35 * size, 0.35 * size, 0.35 * size);
+                const head = new THREE.Mesh(headGeo, mat);
+                head.position.y = 1.45 * size;
+                this.mesh.add(head);
+
+                // Eyes - Glowing on head
+                const eyeGeo = new THREE.BoxGeometry(0.08 * size, 0.08 * size, 0.05 * size);
                 const eyeColor = isBoss ? 0xffff00 : 0xff0000;
                 const eyeMat = new THREE.MeshBasicMaterial({ color: eyeColor });
                 const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-                leftEye.position.set(-0.2 * size, 0.6 * size, 0.4 * size);
-                const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-                rightEye.position.set(0.2 * size, 0.6 * size, 0.4 * size);
+                leftEye.position.set(-0.09 * size, 1.47 * size, 0.18 * size);
                 this.mesh.add(leftEye);
+                const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+                rightEye.position.set(0.09 * size, 1.47 * size, 0.18 * size);
                 this.mesh.add(rightEye);
 
-                // Boss crown
+                // Arms - at shoulder height, pointing down
+                const armGeo = new THREE.BoxGeometry(0.12 * size, 0.5 * size, 0.12 * size);
+                const leftArm = new THREE.Mesh(armGeo, mat);
+                leftArm.position.set(-0.35 * size, 0.75 * size, 0.05 * size);
+                leftArm.rotation.z = 0.15;  // Slight outward angle
+                leftArm.rotation.x = 0.3;    // Point downward/forward
+                this.mesh.add(leftArm);
+                const rightArm = new THREE.Mesh(armGeo, mat);
+                rightArm.position.set(0.35 * size, 0.75 * size, 0.05 * size);
+                rightArm.rotation.z = -0.15; // Slight outward angle
+                rightArm.rotation.x = 0.3;    // Point downward/forward
+                this.mesh.add(rightArm);
+
+                // Boss features
                 if (isBoss) {
-                    const crownGeo = new THREE.ConeGeometry(0.3, 0.5, 4);
-                    const crownMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+                    const crownGeo = new THREE.ConeGeometry(0.2 * size, 0.35 * size, 6);
+                    const crownMat = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffaa00, emissiveIntensity: 0.5, metalness: 0.8 });
                     const crown = new THREE.Mesh(crownGeo, crownMat);
-                    crown.position.set(0, 1.5, 0);
+                    crown.position.set(0, 1.75 * size, 0);
                     this.mesh.add(crown);
+
+                    // Boss aura
+                    for (let i = 0; i < 3; i++) {
+                        const auraGeo = new THREE.SphereGeometry(0.08);
+                        const auraMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.6 });
+                        const aura = new THREE.Mesh(auraGeo, auraMat);
+                        const angle = (i / 3) * Math.PI * 2;
+                        aura.position.set(Math.cos(angle) * 0.5, 1.0, Math.sin(angle) * 0.5);
+                        this.mesh.add(aura);
+                    }
                 }
 
+                this.mesh.position.copy(position);
+                this.mesh.position.y = 0; // Start at ground level
+                this.mesh.castShadow = true;
                 scene.add(this.mesh);
                 this.alive = true;
             }
@@ -684,23 +729,35 @@
 
                 // Move towards player
                 const dir = new THREE.Vector3().subVectors(playerPos, this.mesh.position).normalize();
-                dir.y = 0; // Don't fly
+                dir.y = 0;
 
                 this.mesh.position.add(dir.multiplyScalar(this.speed * dt));
                 this.mesh.lookAt(playerPos.x, this.mesh.position.y, playerPos.z);
 
+                // Slight walking bob
+                this.mesh.children[0].position.y = 0.3 + Math.sin(Date.now() * 0.01) * 0.03; // left leg
+                this.mesh.children[1].position.y = 0.3 + Math.sin(Date.now() * 0.01 + Math.PI) * 0.03; // right leg
+
                 // Attack player
                 const dist = this.mesh.position.distanceTo(playerPos);
                 if (dist < 1.5) {
-                    takeDamage(this.damage * dt); // Damage over time if touching
+                    takeDamage(this.damage * dt);
                 }
             }
 
             takeDamage(amount) {
                 this.hp -= amount;
-                // Flash white
-                this.mesh.material.emissive.setHex(0xffffff);
-                setTimeout(() => { if (this.alive) this.mesh.material.emissive.setHex(0x000000); }, 50);
+                // Flash effect on all children
+                this.mesh.children.forEach(child => {
+                    if (child.material && child.material.emissive) {
+                        child.material.emissive.setHex(0xffffff);
+                        setTimeout(() => {
+                            if (this.alive && child.material.emissive) {
+                                child.material.emissive.setHex(0x000000);
+                            }
+                        }, 50);
+                    }
+                });
 
                 if (this.hp <= 0) this.die();
             }
@@ -714,7 +771,6 @@
                 addGold(this.goldReward);
                 createParticles(this.mesh.position, this.isBoss ? 0xff0000 : 0x00ff00, this.isBoss ? 20 : 10);
 
-                // Boss drops better loot
                 if (this.isBoss && Math.random() > 0.5) {
                     createPickup(this.mesh.position, 'ammo');
                 }
@@ -732,11 +788,50 @@
                 this.expReward = 15;
                 this.goldReward = 5 + state.wave;
 
-                const geo = new THREE.BoxGeometry(0.5, 1.2, 0.5);
-                const mat = new THREE.MeshStandardMaterial({ color: 0xffff00 });
-                this.mesh = new THREE.Mesh(geo, mat);
+                // Sleek runner design
+                this.mesh = new THREE.Group();
+                const mat = new THREE.MeshStandardMaterial({ color: 0xffff00, metalness: 0.4, roughness: 0.6 });
+
+                // Legs at bottom
+                const legGeo = new THREE.BoxGeometry(0.08, 0.4, 0.08);
+                const leg1 = new THREE.Mesh(legGeo, mat);
+                leg1.position.set(-0.12, 0.2, 0);
+                this.mesh.add(leg1);
+                const leg2 = new THREE.Mesh(legGeo, mat);
+                leg2.position.set(0.12, 0.2, 0);
+                this.mesh.add(leg2);
+
+                // Aerodynamic body - above legs
+                const bodyGeo = new THREE.ConeGeometry(0.25, 0.8, 4);
+                const body = new THREE.Mesh(bodyGeo, mat);
+                body.rotation.x = Math.PI / 2;
+                body.position.y = 0.6;
+                this.mesh.add(body);
+
+                // Head - small and pointed at front
+                const headGeo = new THREE.SphereGeometry(0.15, 8, 8);
+                const head = new THREE.Mesh(headGeo, mat);
+                head.position.set(0, 0.7, 0.35);
+                this.mesh.add(head);
+
+                // Glowing eye stripe
+                const eyeGeo = new THREE.BoxGeometry(0.25, 0.05, 0.05);
+                const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const eyes = new THREE.Mesh(eyeGeo, eyeMat);
+                eyes.position.set(0, 0.7, 0.4);
+                this.mesh.add(eyes);
+
+                // Speed trail effect pieces (original positions were fine as they are relative to the body)
+                for (let i = 0; i < 2; i++) {
+                    const trailGeo = new THREE.BoxGeometry(0.15, 0.05, 0.3);
+                    const trailMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.4 });
+                    const trail = new THREE.Mesh(trailGeo, trailMat);
+                    trail.position.set(i === 0 ? -0.15 : 0.15, 0.3, -0.3);
+                    this.mesh.add(trail);
+                }
+
                 this.mesh.position.copy(position);
-                this.mesh.position.y = 0.6;
+                this.mesh.position.y = 0; // Start at ground
                 this.mesh.castShadow = true;
                 scene.add(this.mesh);
                 this.alive = true;
@@ -749,14 +844,22 @@
                 this.mesh.position.add(dir.multiplyScalar(this.speed * dt));
                 this.mesh.lookAt(playerPos.x, this.mesh.position.y, playerPos.z);
 
+                // Fast leg animation
+                this.mesh.children[0].position.y = 0.2 + Math.abs(Math.sin(Date.now() * 0.02)) * 0.08;
+                this.mesh.children[1].position.y = 0.2 + Math.abs(Math.cos(Date.now() * 0.02)) * 0.08;
+
                 const dist = this.mesh.position.distanceTo(playerPos);
                 if (dist < 1.2) takeDamage(this.damage * dt);
             }
 
             takeDamage(amount) {
                 this.hp -= amount;
-                this.mesh.material.emissive.setHex(0xffffff);
-                setTimeout(() => { if (this.alive) this.mesh.material.emissive.setHex(0x000000); }, 50);
+                this.mesh.children.forEach(child => {
+                    if (child.material && child.material.emissive) {
+                        child.material.emissive.setHex(0xffffff);
+                        setTimeout(() => { if (this.alive && child.material.emissive) child.material.emissive.setHex(0x000000); }, 50);
+                    }
+                });
                 if (this.hp <= 0) this.die();
             }
 
@@ -781,11 +884,65 @@
                 this.expReward = 40;
                 this.goldReward = 20 + state.wave * 2;
 
-                const geo = new THREE.BoxGeometry(1.2, 2.2, 1.2);
-                const mat = new THREE.MeshStandardMaterial({ color: 0x666666 });
-                this.mesh = new THREE.Mesh(geo, mat);
+                // Heavily armored tank design
+                this.mesh = new THREE.Group();
+                const mat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.8, roughness: 0.3 });
+                const plateMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.9, roughness: 0.2 });
+
+                // Legs - thick and at bottom
+                const legGeo = new THREE.BoxGeometry(0.25, 0.5, 0.25);
+                const leftLeg = new THREE.Mesh(legGeo, mat);
+                leftLeg.position.set(-0.3, 0.25, 0);
+                this.mesh.add(leftLeg);
+                const rightLeg = new THREE.Mesh(legGeo, mat);
+                rightLeg.position.set(0.3, 0.25, 0);
+                this.mesh.add(rightLeg);
+
+                // Bottom armor plate
+                const bottomPlate = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.15, 0.75), plateMat);
+                bottomPlate.position.y = 0.55;
+                this.mesh.add(bottomPlate);
+
+                // Main body - large and wide
+                const bodyGeo = new THREE.BoxGeometry(0.9, 0.9, 0.7);
+                const body = new THREE.Mesh(bodyGeo, mat);
+                body.position.y = 1.1;
+                this.mesh.add(body);
+
+                // Top armor plate
+                const topPlate = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.15, 0.75), plateMat);
+                topPlate.position.y = 1.6;
+                this.mesh.add(topPlate);
+
+                // Head/turret
+                const headGeo = new THREE.CylinderGeometry(0.25, 0.3, 0.35, 8);
+                const head = new THREE.Mesh(headGeo, mat);
+                head.position.y = 1.85;
+                this.mesh.add(head);
+
+                // Glowing red eyes
+                const eyeGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.08, 6);
+                const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+                leftEye.position.set(-0.1, 1.85, 0.25);
+                leftEye.rotation.x = Math.PI / 2;
+                this.mesh.add(leftEye);
+                const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+                rightEye.position.set(0.1, 1.85, 0.25);
+                rightEye.rotation.x = Math.PI / 2;
+                this.mesh.add(rightEye);
+
+                // Shoulder armor
+                const shoulderGeo = new THREE.BoxGeometry(0.25, 0.35, 0.25);
+                const leftShoulder = new THREE.Mesh(shoulderGeo, plateMat);
+                leftShoulder.position.set(-0.6, 1.2, 0);
+                this.mesh.add(leftShoulder);
+                const rightShoulder = new THREE.Mesh(shoulderGeo, plateMat);
+                rightShoulder.position.set(0.6, 1.2, 0);
+                this.mesh.add(rightShoulder);
+
                 this.mesh.position.copy(position);
-                this.mesh.position.y = 1.1;
+                this.mesh.position.y = 0; // Ground level
                 this.mesh.castShadow = true;
                 scene.add(this.mesh);
                 this.alive = true;
@@ -798,15 +955,22 @@
                 this.mesh.position.add(dir.multiplyScalar(this.speed * dt));
                 this.mesh.lookAt(playerPos.x, this.mesh.position.y, playerPos.z);
 
+                // Slight stomp
+                this.mesh.children[0].position.y = 0.25 + Math.sin(Date.now() * 0.005) * 0.02; // left leg
+                this.mesh.children[1].position.y = 0.25 + Math.cos(Date.now() * 0.005) * 0.02; // right leg
+
                 const dist = this.mesh.position.distanceTo(playerPos);
                 if (dist < 1.8) takeDamage(this.damage * dt);
             }
 
             takeDamage(amount) {
-                // Tanks take reduced damage
                 this.hp -= amount * 0.7;
-                this.mesh.material.emissive.setHex(0xffffff);
-                setTimeout(() => { if (this.alive) this.mesh.material.emissive.setHex(0x000000); }, 50);
+                this.mesh.children.forEach(child => {
+                    if (child.material && child.material.emissive) {
+                        child.material.emissive.setHex(0xff0000);
+                        setTimeout(() => { if (this.alive && child.material.emissive) child.material.emissive.setHex(0x000000); }, 50);
+                    }
+                });
                 if (this.hp <= 0) this.die();
             }
 
@@ -833,9 +997,57 @@
                 this.expReward = 25;
                 this.goldReward = 15 + state.wave;
 
-                const geo = new THREE.SphereGeometry(0.6);
-                const mat = new THREE.MeshStandardMaterial({ color: 0xff6600, emissive: 0xff3300, emissiveIntensity: 0.5 });
-                this.mesh = new THREE.Mesh(geo, mat);
+                // Dangerous spiked sphere design
+                this.mesh = new THREE.Group();
+
+                // Core sphere with glowing effect
+                const coreGeo = new THREE.SphereGeometry(0.4, 12, 12);
+                const coreMat = new THREE.MeshStandardMaterial({
+                    color: 0xff6600,
+                    emissive: 0xff3300,
+                    emissiveIntensity: 0.8,
+                    roughness: 0.3,
+                    metalness: 0.2
+                });
+                const core = new THREE.Mesh(coreGeo, coreMat);
+                this.mesh.add(core);
+                this.coreMaterial = coreMat; // Store reference for pulsing
+
+                // Inner glowing core
+                const innerGeo = new THREE.SphereGeometry(0.25, 8, 8);
+                const innerMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.7 });
+                const innerCore = new THREE.Mesh(innerGeo, innerMat);
+                this.mesh.add(innerCore);
+
+                // Spikes pointing outward
+                const spikeGeo = new THREE.ConeGeometry(0.1, 0.4, 4);
+                const spikeMat = new THREE.MeshStandardMaterial({ color: 0x331100, metalness: 0.7 });
+
+                // Create spikes in multiple directions
+                const spikePositions = [
+                    [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1],
+                    [0.7, 0.7, 0], [-0.7, 0.7, 0], [0.7, -0.7, 0], [-0.7, -0.7, 0],
+                    [0, 0.7, 0.7], [0, -0.7, 0.7], [0, 0.7, -0.7], [0, -0.7, -0.7]
+                ];
+
+                spikePositions.forEach(pos => {
+                    const spike = new THREE.Mesh(spikeGeo, spikeMat);
+                    const dir = new THREE.Vector3(pos[0], pos[1], pos[2]).normalize();
+                    spike.position.copy(dir.multiplyScalar(0.4));
+                    spike.lookAt(dir.multiplyScalar(2));
+                    this.mesh.add(spike);
+                });
+
+                // Energy rings
+                for (let i = 0; i < 2; i++) {
+                    const ringGeo = new THREE.TorusGeometry(0.5 + i * 0.15, 0.03, 8, 16);
+                    const ringMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.4 });
+                    const ring = new THREE.Mesh(ringGeo, ringMat);
+                    ring.rotation.x = Math.PI / 2 + (i * 0.3);
+                    ring.rotation.y = i * 0.5;
+                    this.mesh.add(ring);
+                }
+
                 this.mesh.position.copy(position);
                 this.mesh.position.y = 0.6;
                 this.mesh.castShadow = true;
@@ -847,9 +1059,13 @@
             update(dt, playerPos) {
                 if (!this.alive) return;
 
-                // Pulsing effect
+                // Intense pulsing effect
                 this.pulseTime += dt * 5;
-                this.mesh.material.emissiveIntensity = 0.5 + Math.sin(this.pulseTime) * 0.3;
+                this.coreMaterial.emissiveIntensity = 0.5 + Math.sin(this.pulseTime) * 0.4;
+
+                // Rotate for menacing effect
+                this.mesh.rotation.y += dt * 2;
+                this.mesh.rotation.x = Math.sin(this.pulseTime * 0.5) * 0.2;
 
                 const dir = new THREE.Vector3().subVectors(playerPos, this.mesh.position).normalize();
                 dir.y = 0;
@@ -868,7 +1084,6 @@
                 if (!this.alive) return;
                 this.alive = false;
 
-                // Check if player is in radius
                 const dist = this.mesh.position.distanceTo(playerPos);
                 if (dist < this.explosionRadius) {
                     takeDamage(this.damage * (1 - dist / this.explosionRadius));
@@ -1373,10 +1588,11 @@
                 let b = bullets[i];
                 b.update(delta);
 
-                // Zombie Collision - Check all enemy types
+                // Zombie Collision - Check all enemy types with larger radius for headshots
                 for (let j = zombies.length - 1; j >= 0; j--) {
                     let z = zombies[j];
-                    if (z.alive && b.alive && !b.hitEnemies.has(z) && b.mesh.position.distanceTo(z.mesh.position) < 1.0) {
+                    // Increased radius to 1.5 to allow hitting head and all body parts
+                    if (z.alive && b.alive && !b.hitEnemies.has(z) && b.mesh.position.distanceTo(z.mesh.position) < 1.5) {
                         // Apply critical hit
                         let damage = b.damage;
                         if (Math.random() * 100 < state.critChance) {
