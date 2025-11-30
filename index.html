@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon City: Undead Rising RPG</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+        }
+
+        /* HUD Layers */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        /* Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .crosshair-line {
+            position: absolute;
+            background: lime;
+        }
+
+        .h-line {
+            width: 100%;
+            height: 2px;
+            top: 9px;
+        }
+
+        .v-line {
+            height: 100%;
+            width: 2px;
+            left: 9px;
+        }
+
+        /* Stats HUD */
+        #stats-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            text-shadow: 1px 1px 0 #000;
+            font-size: 18px;
+            line-height: 1.5;
+        }
+
+        .stat-box {
+            display: flex;
+            gap: 15px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #0ff;
+        }
+
+        .hp-bar-bg {
+            width: 200px;
+            height: 15px;
+            background: #333;
+            border: 1px solid #fff;
+            margin-top: 5px;
+        }
+
+        .hp-bar-fill {
+            height: 100%;
+            background: #f00;
+            width: 100%;
+            transition: width 0.2s;
+        }
+
+        .exp-bar-bg {
+            width: 200px;
+            height: 8px;
+            background: #333;
+            border: 1px solid #888;
+            margin-top: 5px;
+        }
+
+        .exp-bar-fill {
+            height: 100%;
+            background: #fd0;
+            width: 0%;
+            transition: width 0.2s;
+        }
+
+        /* Wave Info */
+        #wave-panel {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #f00;
+            font-size: 32px;
+            font-weight: bold;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        /* Interaction Hints */
+        #hint-panel {
+            position: absolute;
+            bottom: 100px;
+            right: 20px;
+            text-align: right;
+            color: #ccc;
+            font-size: 14px;
+        }
+
+        /* Menus (Shop/Skills/Pause) */
+        .modal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #0ff;
+            padding: 20px;
+            color: white;
+            width: 600px;
+            text-align: center;
+            pointer-events: auto;
+            border-radius: 10px;
+            box-shadow: 0 0 20px #0ff;
+        }
+
+        .modal h2 {
+            margin-top: 0;
+            color: #0ff;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .modal-content {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            background: #222;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: 0.2s;
+            width: 45%;
+        }
+
+        .btn:hover {
+            background: #444;
+            border-color: #fff;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-green {
+            border-color: lime;
+            color: lime;
+        }
+
+        .btn-gold {
+            border-color: gold;
+            color: gold;
+        }
+
+        /* Start Screen */
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            pointer-events: auto;
+        }
+
+        h1 {
+            font-size: 60px;
+            color: #f00;
+            text-shadow: 0 0 10px #f00;
+            margin: 0;
+        }
+
+        .start-btn {
+            font-size: 24px;
+            padding: 15px 40px;
+            margin-top: 20px;
+            cursor: pointer;
+            background: #f00;
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+
+        /* Damage Overlay */
+        #damage-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, transparent 50%, rgba(255, 0, 0, 0.5) 100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .notification {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            color: gold;
+            font-size: 24px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 1s;
+            text-shadow: 1px 1px 0 #000;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay -->
+    <div id="damage-overlay"></div>
+    <div id="ui-layer">
+        <div id="crosshair">
+            <div class="crosshair-line h-line"></div>
+            <div class="crosshair-line v-line"></div>
+        </div>
+
+        <div id="wave-panel">WAVE 1</div>
+
+        <div id="stats-panel">
+            <div class="stat-box">
+                <div>LVL <span id="hud-level" class="stat-value">1</span></div>
+                <div>GOLD <span id="hud-gold" class="stat-value" style="color:gold;">0</span></div>
+                <div>SKILL PTS <span id="hud-sp" class="stat-value" style="color:lime;">0</span></div>
+            </div>
+            <div class="hp-bar-bg">
+                <div id="hud-hp-fill" class="hp-bar-fill"></div>
+            </div>
+            <div style="font-size: 14px; margin-top: 2px;">HP: <span id="hud-hp-text">100/100</span></div>
+            <div class="exp-bar-bg">
+                <div id="hud-exp-fill" class="exp-bar-fill"></div>
+            </div>
+        </div>
+
+        <div id="hint-panel">
+            [WASD] Move &nbsp; [SPACE] Jump &nbsp; [L-Click] Shoot<br>
+            [B] Shop &nbsp; [K] Skills &nbsp; [ESC] Pause
+        </div>
+
+        <div id="notification-area" class="notification">Level Up!</div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen">
+        <h1>NEON CITY Z</h1>
+        <p>Survive the waves. Upgrade your gear. Become the ultimate hunter.</p>
+        <button class="start-btn" onclick="startGame()">ENTER CITY</button>
+    </div>
+
+    <!-- Shop Modal -->
+    <div id="shop-modal" class="modal">
+        <h2>WEAPON SHOP (Press B to Close)</h2>
+        <div class="modal-content">
+            <button class="btn btn-gold" id="btn-buy-potion" onclick="buyPotion()">
+                Health Potion (50g)<br><small>Restore 50 HP</small>
+            </button>
+            <button class="btn btn-gold" id="btn-buy-firerate" onclick="buyFireRate()">
+                Rapid Trigger (200g)<br><small>-10% Reload Time</small>
+            </button>
+        </div>
+        <p>Your Gold: <span id="shop-gold">0</span></p>
+    </div>
+
+    <!-- Skills Modal -->
+    <div id="skill-modal" class="modal">
+        <h2>SKILL TREE (Press K to Close)</h2>
+        <div class="modal-content">
+            <button class="btn btn-green" onclick="upgradeSkill('damage')">
+                Increase Damage<br><small>Cost: 1 SP</small>
+            </button>
+            <button class="btn btn-green" onclick="upgradeSkill('health')">
+                Max Health (+20)<br><small>Cost: 1 SP</small>
+            </button>
+            <button class="btn btn-green" onclick="upgradeSkill('speed')">
+                Move Speed (+5%)<br><small>Cost: 1 SP</small>
+            </button>
+        </div>
+        <p>Available Points: <span id="skill-points">0</span></p>
+    </div>
+
+    <script>
+        // --- GAME CONFIGURATION & STATE ---
+        const CONFIG = {
+            gravity: 30,
+            playerSpeed: 15,
+            playerJump: 15,
+            baseDamage: 25,
+            baseFireRate: 400, // ms
+            colors: {
+                sky: 0x050510,
+                ground: 0x111111,
+                building: 0x222222,
+                buildingRim: 0x00ffff,
+                zombie: 0x00ff00,
+                bullet: 0xffff00
+            }
+        };
+
+        const state = {
+            hp: 100,
+            maxHp: 100,
+            gold: 0,
+            level: 1,
+            exp: 0,
+            expToNext: 100,
+            skillPoints: 0,
+            wave: 1,
+            enemiesRemaining: 0,
+            enemiesToSpawn: 0,
+            lastShot: 0,
+            fireRate: CONFIG.baseFireRate,
+            damage: CONFIG.baseDamage,
+            speedMult: 1.0,
+            isPaused: true,
+            isGameOver: false,
+            canShoot: true
+        };
+
+        // --- THREE.JS SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(CONFIG.colors.sky);
+        scene.fog = new THREE.Fog(CONFIG.colors.sky, 10, 80); // Fog creates atmosphere and hides draw distance
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.y = 1.6; // Eye level
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(50, 100, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.camera.left = -50;
+        dirLight.shadow.camera.right = 50;
+        dirLight.shadow.camera.top = 50;
+        dirLight.shadow.camera.bottom = -50;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        // Controls
+        const controls = new THREE.PointerLockControls(camera, document.body);
+
+        // --- ASSETS GENERATION ---
+
+        // Ground
+        const groundGeo = new THREE.PlaneGeometry(400, 400);
+        const groundMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.ground, roughness: 0.8 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // City Generation
+        const buildings = [];
+        const citySize = 10; // 10x10 blocks
+        const blockSize = 20;
+        const streetWidth = 15;
+
+        function createCity() {
+            const geometry = new THREE.BoxGeometry(10, 1, 10);
+            const material = new THREE.MeshStandardMaterial({ color: CONFIG.colors.building });
+            const edgeMaterial = new THREE.LineBasicMaterial({ color: CONFIG.colors.buildingRim });
+
+            for (let x = -citySize; x <= citySize; x++) {
+                for (let z = -citySize; z <= citySize; z++) {
+                    // Don't build on start area
+                    if (Math.abs(x) < 2 && Math.abs(z) < 2) continue;
+
+                    // Random Height Building
+                    const height = Math.random() * 20 + 10;
+                    const bGeo = new THREE.BoxGeometry(12, height, 12);
+                    const building = new THREE.Mesh(bGeo, material);
+                    building.position.set(x * (blockSize + streetWidth), height / 2, z * (blockSize + streetWidth));
+                    building.castShadow = true;
+                    building.receiveShadow = true;
+                    scene.add(building);
+                    buildings.push(building);
+
+                    // Neon Edges
+                    const edges = new THREE.EdgesGeometry(bGeo);
+                    const line = new THREE.LineSegments(edges, edgeMaterial);
+                    building.add(line);
+                }
+            }
+        }
+        createCity();
+
+        // Gun Model
+        const gunGroup = new THREE.Group();
+        const gunGeo = new THREE.BoxGeometry(0.15, 0.15, 0.6);
+        const gunMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const gunMesh = new THREE.Mesh(gunGeo, gunMat);
+        gunMesh.position.set(0.2, -0.2, -0.3);
+        gunGroup.add(gunMesh);
+
+        // Gun barrel glow
+        const barrelGeo = new THREE.BoxGeometry(0.05, 0.05, 0.1);
+        const barrelMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+        const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+        barrel.position.set(0.2, -0.2, -0.6);
+        gunGroup.add(barrel);
+
+        camera.add(gunGroup);
+        scene.add(camera);
+
+        // --- GAME ENTITIES ---
+
+        let bullets = [];
+        let zombies = [];
+        let particles = [];
+
+        class Bullet {
+            constructor(position, quaternion) {
+                const geo = new THREE.SphereGeometry(0.05);
+                const mat = new THREE.MeshBasicMaterial({ color: CONFIG.colors.bullet });
+                this.mesh = new THREE.Mesh(geo, mat);
+                this.mesh.position.copy(position);
+                this.mesh.quaternion.copy(quaternion);
+                this.speed = 40;
+                this.alive = true;
+                this.life = 2.0; // seconds
+
+                // Start slightly ahead of camera
+                this.mesh.translateZ(-0.5);
+
+                scene.add(this.mesh);
+            }
+
+            update(dt) {
+                this.mesh.translateZ(-this.speed * dt);
+                this.life -= dt;
+                if (this.life <= 0) this.kill();
+
+                // Simple collision with buildings
+                // Raycasting is expensive, simple distance check for this demo
+                // Or simply let them pass through buildings for simplicity
+            }
+
+            kill() {
+                this.alive = false;
+                scene.remove(this.mesh);
+                this.mesh.geometry.dispose();
+            }
+        }
+
+        class Zombie {
+            constructor(position) {
+                this.hp = 50 + (state.wave * 10);
+                this.maxHp = this.hp;
+                this.speed = 4 + (state.wave * 0.2);
+                this.damage = 10;
+
+                const geo = new THREE.BoxGeometry(0.8, 1.8, 0.8);
+                const mat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.zombie });
+                this.mesh = new THREE.Mesh(geo, mat);
+                this.mesh.position.copy(position);
+                this.mesh.position.y = 0.9; // Half height
+                this.mesh.castShadow = true;
+
+                // Eyes
+                const eyeGeo = new THREE.BoxGeometry(0.2, 0.1, 0.1);
+                const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+                leftEye.position.set(-0.2, 0.6, 0.4);
+                const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+                rightEye.position.set(0.2, 0.6, 0.4);
+                this.mesh.add(leftEye);
+                this.mesh.add(rightEye);
+
+                scene.add(this.mesh);
+                this.alive = true;
+            }
+
+            update(dt, playerPos) {
+                if (!this.alive) return;
+
+                // Move towards player
+                const dir = new THREE.Vector3().subVectors(playerPos, this.mesh.position).normalize();
+                dir.y = 0; // Don't fly
+
+                this.mesh.position.add(dir.multiplyScalar(this.speed * dt));
+                this.mesh.lookAt(playerPos.x, this.mesh.position.y, playerPos.z);
+
+                // Attack player
+                const dist = this.mesh.position.distanceTo(playerPos);
+                if (dist < 1.5) {
+                    takeDamage(this.damage * dt); // Damage over time if touching
+                }
+            }
+
+            takeDamage(amount) {
+                this.hp -= amount;
+                // Flash white
+                this.mesh.material.emissive.setHex(0xffffff);
+                setTimeout(() => { if (this.alive) this.mesh.material.emissive.setHex(0x000000); }, 50);
+
+                if (this.hp <= 0) this.die();
+            }
+
+            die() {
+                this.alive = false;
+                scene.remove(this.mesh);
+                state.enemiesRemaining--;
+                addExp(20);
+                addGold(10 + state.wave);
+                createParticles(this.mesh.position, 0x00ff00, 10);
+            }
+        }
+
+        function createParticles(pos, color, count) {
+            for (let i = 0; i < count; i++) {
+                const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+                const mat = new THREE.MeshBasicMaterial({ color: color });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(pos);
+                mesh.position.x += (Math.random() - 0.5);
+                mesh.position.y += (Math.random() - 0.5);
+                mesh.position.z += (Math.random() - 0.5);
+
+                const vel = new THREE.Vector3((Math.random() - 0.5) * 5, Math.random() * 5, (Math.random() - 0.5) * 5);
+
+                particles.push({ mesh, vel, life: 1.0 });
+                scene.add(mesh);
+            }
+        }
+
+        // --- GAME LOGIC ---
+
+        // Input
+        const moveState = { forward: false, backward: false, left: false, right: false, jump: false };
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        let canJump = false;
+
+        document.addEventListener('keydown', (event) => {
+            switch (event.code) {
+                case 'ArrowUp': case 'KeyW': moveState.forward = true; break;
+                case 'ArrowLeft': case 'KeyA': moveState.left = true; break;
+                case 'ArrowDown': case 'KeyS': moveState.backward = true; break;
+                case 'ArrowRight': case 'KeyD': moveState.right = true; break;
+                case 'Space': if (canJump) velocity.y = CONFIG.playerJump; canJump = false; break;
+                case 'KeyB': toggleModal('shop-modal'); break;
+                case 'KeyK': toggleModal('skill-modal'); break;
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            switch (event.code) {
+                case 'ArrowUp': case 'KeyW': moveState.forward = false; break;
+                case 'ArrowLeft': case 'KeyA': moveState.left = false; break;
+                case 'ArrowDown': case 'KeyS': moveState.backward = false; break;
+                case 'ArrowRight': case 'KeyD': moveState.right = false; break;
+            }
+        });
+
+        document.addEventListener('mousedown', () => {
+            if (state.isPaused || !state.canShoot) return;
+            const now = Date.now();
+            if (now - state.lastShot > state.fireRate) {
+                shoot();
+                state.lastShot = now;
+            }
+        });
+
+        function shoot() {
+            // Recoil
+            gunGroup.position.z = 0.2; // Move back
+
+            // Bullet
+            bullets.push(new Bullet(camera.position, camera.quaternion));
+
+            // Check Hitscan (for instant visual feedback mostly, logic uses projectiles)
+            // But for this game, we rely on the Bullet update loop for collision
+        }
+
+        // Wave Management
+        function startWave() {
+            state.enemiesToSpawn = 3 + Math.floor(state.wave * 1.5);
+            state.enemiesRemaining = state.enemiesToSpawn;
+
+            const spawnInterval = setInterval(() => {
+                if (state.isPaused) return; // Don't spawn if paused
+                if (state.enemiesToSpawn <= 0) {
+                    clearInterval(spawnInterval);
+                    return;
+                }
+
+                // Spawn Randomly away from player
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 30 + Math.random() * 20;
+                const x = camera.position.x + Math.cos(angle) * dist;
+                const z = camera.position.z + Math.sin(angle) * dist;
+
+                zombies.push(new Zombie(new THREE.Vector3(x, 0, z)));
+                state.enemiesToSpawn--;
+            }, 1000);
+        }
+
+        // RPG Functions
+        function addExp(amount) {
+            state.exp += amount;
+            if (state.exp >= state.expToNext) {
+                state.level++;
+                state.exp -= state.expToNext;
+                state.expToNext = Math.floor(state.expToNext * 1.2);
+                state.skillPoints++;
+                state.hp = state.maxHp; // Heal on level up
+                showNotification("LEVEL UP! Skill Point Gained!");
+            }
+            updateHUD();
+        }
+
+        function addGold(amount) {
+            state.gold += amount;
+            updateHUD();
+        }
+
+        function takeDamage(amount) {
+            state.hp -= amount;
+
+            // Flash red
+            const overlay = document.getElementById('damage-overlay');
+            overlay.style.opacity = 0.6;
+            setTimeout(() => { overlay.style.opacity = 0; }, 300);
+
+            if (state.hp <= 0 && !state.isGameOver) {
+                state.isGameOver = true;
+                controls.unlock();
+                alert(`GAME OVER\nYou reached Wave ${state.wave}\nRefresh to restart.`);
+                location.reload();
+            }
+            updateHUD();
+        }
+
+        // Shop & Skills
+        function toggleModal(id) {
+            const modal = document.getElementById(id);
+            if (modal.style.display === 'block') {
+                modal.style.display = 'none';
+                controls.lock();
+            } else {
+                // Close others
+                document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+                modal.style.display = 'block';
+                controls.unlock();
+                updateMenus();
+            }
+        }
+
+        function updateMenus() {
+            document.getElementById('shop-gold').innerText = state.gold;
+            document.getElementById('skill-points').innerText = state.skillPoints;
+
+            // Disable logic
+            document.getElementById('btn-buy-potion').disabled = state.gold < 50;
+            document.getElementById('btn-buy-firerate').disabled = state.gold < 200;
+        }
+
+        window.buyPotion = () => {
+            if (state.gold >= 50) {
+                state.gold -= 50;
+                state.hp = Math.min(state.hp + 50, state.maxHp);
+                updateHUD();
+                updateMenus();
+            }
+        };
+
+        window.buyFireRate = () => {
+            if (state.gold >= 200) {
+                state.gold -= 200;
+                state.fireRate = Math.max(100, state.fireRate * 0.9);
+                updateHUD();
+                updateMenus();
+            }
+        };
+
+        window.upgradeSkill = (type) => {
+            if (state.skillPoints > 0) {
+                state.skillPoints--;
+                if (type === 'damage') state.damage *= 1.2;
+                if (type === 'health') { state.maxHp += 20; state.hp += 20; }
+                if (type === 'speed') state.speedMult += 0.05;
+                updateHUD();
+                updateMenus();
+            }
+        };
+
+        function showNotification(text) {
+            const el = document.getElementById('notification-area');
+            el.innerText = text;
+            el.style.opacity = 1;
+            setTimeout(() => el.style.opacity = 0, 3000);
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-level').innerText = state.level;
+            document.getElementById('hud-gold').innerText = state.gold;
+            document.getElementById('hud-sp').innerText = state.skillPoints;
+
+            const hpPct = (state.hp / state.maxHp) * 100;
+            document.getElementById('hud-hp-fill').style.width = hpPct + '%';
+            document.getElementById('hud-hp-text').innerText = Math.floor(state.hp) + '/' + state.maxHp;
+
+            const expPct = (state.exp / state.expToNext) * 100;
+            document.getElementById('hud-exp-fill').style.width = expPct + '%';
+
+            document.getElementById('wave-panel').innerText = "WAVE " + state.wave;
+        }
+
+        // --- MAIN LOOP ---
+
+        controls.addEventListener('lock', () => {
+            state.isPaused = false;
+            document.getElementById('start-screen').style.display = 'none';
+        });
+
+        controls.addEventListener('unlock', () => {
+            // Only pause if not game over and not in a menu
+            const anyModalOpen = document.querySelector('.modal[style*="block"]');
+            if (!state.isGameOver && !anyModalOpen) {
+                // Just unlocked via ESC without opening menu
+                state.isPaused = true;
+                // Optional: Show "Paused" text
+            }
+            if (anyModalOpen) state.isPaused = true;
+        });
+
+        window.startGame = () => {
+            controls.lock();
+            startWave();
+        };
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (state.isPaused || state.isGameOver) return;
+
+            const delta = Math.min(clock.getDelta(), 0.1); // Cap delta to prevent huge jumps
+
+            // 1. Physics & Movement
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+            velocity.y -= CONFIG.gravity * delta; // Gravity
+
+            direction.z = Number(moveState.forward) - Number(moveState.backward);
+            direction.x = Number(moveState.right) - Number(moveState.left);
+            direction.normalize();
+
+            if (moveState.forward || moveState.backward) velocity.z -= direction.z * 400.0 * delta * state.speedMult;
+            if (moveState.left || moveState.right) velocity.x -= direction.x * 400.0 * delta * state.speedMult;
+
+            controls.moveRight(-velocity.x * delta);
+            controls.moveForward(-velocity.z * delta);
+
+            camera.position.y += velocity.y * delta;
+
+            // Ground Collision
+            if (camera.position.y < 1.6) {
+                velocity.y = 0;
+                camera.position.y = 1.6;
+                canJump = true;
+            }
+
+            // Building Collision (Simple bounding box check against current block)
+            // For this version, we will trust the player not to walk through walls or 
+            // implement a very basic pushback if x/z is inside a building block
+            buildings.forEach(b => {
+                const box = new THREE.Box3().setFromObject(b);
+                const playerPos = camera.position.clone();
+                playerPos.y = b.position.y; // Ignore height for wall check
+
+                // Expand box slightly for collision radius
+                box.expandByScalar(0.5);
+
+                if (box.containsPoint(playerPos)) {
+                    // Push back - simple naive approach
+                    const dir = new THREE.Vector3().subVectors(camera.position, b.position).normalize();
+                    dir.y = 0;
+                    controls.moveRight(dir.x * 0.2); // Nudge
+                    controls.moveForward(dir.z * 0.2);
+                }
+            });
+
+            // 2. Gun Animation
+            gunGroup.position.z += (0 - gunGroup.position.z) * 10 * delta; // Return to pos
+
+            // 3. Bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.update(delta);
+
+                // Zombie Collision
+                for (let j = zombies.length - 1; j >= 0; j--) {
+                    let z = zombies[j];
+                    if (z.alive && b.alive && b.mesh.position.distanceTo(z.mesh.position) < 1.0) {
+                        z.takeDamage(state.damage);
+                        b.kill();
+                        createParticles(b.mesh.position, 0xffff00, 3);
+                        break;
+                    }
+                }
+
+                if (!b.alive) bullets.splice(i, 1);
+            }
+
+            // 4. Zombies
+            if (zombies.length === 0 && state.enemiesToSpawn === 0) {
+                // Wave Complete
+                state.wave++;
+                showNotification(`WAVE ${state.wave} STARTED`);
+                startWave();
+            }
+
+            for (let i = zombies.length - 1; i >= 0; i--) {
+                let z = zombies[i];
+                z.update(delta, camera.position);
+                if (!z.alive) zombies.splice(i, 1);
+            }
+
+            // 5. Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.life -= delta;
+                p.mesh.position.add(p.vel.clone().multiplyScalar(delta));
+                p.vel.y -= 9.8 * delta; // gravity
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    particles.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+
+</html>
